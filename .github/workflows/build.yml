@@ -1,0 +1,47 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+      - name: Compilar
+        run: gradle assembleDebug --stacktrace
+      - name: Nombre con número de cambio
+        id: ver
+        run: |
+          V="Calendario_V$(tr -d '[:space:]' < version.txt)"
+          cp app/build/outputs/apk/debug/app-debug.apk "$V.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk Calendario.apk
+          echo "name=$V" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.name }}
+          path: ${{ steps.ver.outputs.name }}.apk
+      # Release con enlace directo: Calendario.apk (enlace fijo) y Calendario_V<n>.apk (versión concreta).
+      - name: Publicar APK descargable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ steps.ver.outputs.name }}
+        run: |
+          gh release view ultimo-apk >/dev/null 2>&1 ||             gh release create ultimo-apk --title "Calendario - última compilación" --notes "Última versión compilada desde main."
+          # Quitar APKs de versiones anteriores para no acumular
+          for a in $(gh release view ultimo-apk --json assets -q '.assets[].name' | grep -E '^Calendario_V[0-9]+\.apk$' | grep -v "^$NAME.apk$" || true); do
+            gh release delete-asset ultimo-apk "$a" -y
+          done
+          gh release upload ultimo-apk Calendario.apk "$NAME.apk" --clobber
+          gh release edit ultimo-apk --title "Calendario - $NAME" --notes "$NAME generado desde main el $(date -u '+%d/%m/%Y %H:%M UTC'). Commit ${GITHUB_SHA::7}."
