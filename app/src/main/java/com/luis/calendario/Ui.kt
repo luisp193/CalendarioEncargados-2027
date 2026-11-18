@@ -179,7 +179,7 @@ fun App(cal: Cal, vac: Vacaciones) {
     MaterialTheme {
         Scaffold(
             bottomBar = {
-                NavigationBar {
+                if (anual == null) NavigationBar {
                     tabs.forEachIndexed { i, (n, ic) ->
                         NavigationBarItem(
                             selected = tab == i, onClick = { tab = i },
