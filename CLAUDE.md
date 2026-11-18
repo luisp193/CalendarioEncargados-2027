@@ -25,6 +25,10 @@ App Android personal de Luis para consultar el calendario de turnos de 12 h de l
 - Cada día de vacaciones sobre un turno de 8 h descuenta 1 día sobrante; sobre uno de 12 h descuenta 1,5 (un fin de semana trabajado = 24 h = 3 jornadas de 8 h). Vacaciones en día libre no descuentan.
 - La fila de **LUIS** siempre va más marcada (borde grueso negro, letra grande y en negrita, estrella ★).
 
+## Interacción del Calendario
+- Tocar un día (casilla) → abre la pantalla Día con esa fecha. Mantener pulsada una casilla 2 s → diálogo para apuntar/quitar vacaciones eligiendo rango (Desde/Hasta). Mantener pulsado un nombre 2 s → año completo.
+- Barra inferior propia (50 dp, iconos de 24 sp) en vez de NavigationBar, para dejar más sitio al calendario en vertical.
+
 ## Estructura
 - `Data.kt`: modelo (`Cal` = un año, `Calendarios` = todos los años), reglas de turnos, almacén de vacaciones (`VacStore`) y su vista por año (`Vacaciones`). Selector de año ◀ ▶ arriba en la app.
 - `Anual.kt`: vista del año completo de un encargado (ajustada para entrar entera en pantalla, zoom con pellizco, doble toque restaura, sin barra inferior) (se abre manteniendo pulsado 2 s su nombre en el Calendario).

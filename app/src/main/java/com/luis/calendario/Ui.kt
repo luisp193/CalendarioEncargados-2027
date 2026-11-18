@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -118,6 +120,24 @@ fun hoyOInicio(cal: Cal): LocalDate {
 }
 
 // ---------- Piezas comunes ----------
+/** Toque corto = onTap; mantener pulsado 2 s = onLong. */
+fun Modifier.tapOLargo(k1: Any?, k2: Any?, onTap: () -> Unit, onLong: () -> Unit): Modifier =
+    pointerInput(k1, k2) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            var estado = 1 // 0 = toque, 1 = largo, 2 = cancelado (scroll, etc.)
+            withTimeoutOrNull(2000L) {
+                val up = waitForUpOrCancellation()
+                estado = if (up != null) 0 else 2
+            }
+            if (estado == 0) onTap()
+            else if (estado == 1) {
+                onLong()
+                waitForUpOrCancellation()
+            }
+        }
+    }
+
 /** Pulsación larga de 2 segundos. */
 fun Modifier.pulsar2s(onLong: () -> Unit): Modifier = pointerInput(Unit) {
     awaitEachGesture {
@@ -192,13 +212,21 @@ fun App(cals: Calendarios, store: VacStore) {
     MaterialTheme {
         Scaffold(
             bottomBar = {
-                if (anual == null) NavigationBar {
+                if (anual == null) Row(
+                    Modifier.fillMaxWidth().background(Color(0xFFF1EEF6)).navigationBarsPadding().height(50.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     tabs.forEachIndexed { i, (n, ic) ->
-                        NavigationBarItem(
-                            selected = tab == i, onClick = { tab = i },
-                            icon = { Text(ic, fontSize = 18.sp) },
-                            label = { Text(n, fontSize = 10.sp, maxLines = 1) }
-                        )
+                        Column(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .background(if (tab == i) Color(0xFFD8CCF0) else Color.Transparent)
+                                .clickable { tab = i },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(ic, fontSize = 24.sp, lineHeight = 26.sp)
+                            Text(n, fontSize = 9.sp, maxLines = 1, lineHeight = 10.sp)
+                        }
                     }
                 }
             }
@@ -247,6 +275,9 @@ fun App(cals: Calendarios, store: VacStore) {
 fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (LocalDate) -> Unit, onAnual: (Int) -> Unit) {
     var month by remember { mutableStateOf(inicial.monthValue) }
     var sel by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var rDesde by remember { mutableStateOf<LocalDate?>(null) }
+    var rHasta by remember { mutableStateOf<LocalDate?>(null) }
+    val ctx = LocalContext.current
     val n = cal.monthLength(month)
     val start = cal.monthStart(month)
 
@@ -300,7 +331,9 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
                                 Modifier.size(cw, rowH(p))
                                     .background(bg)
                                     .border(if (luis) 2.dp else 0.5.dp, if (luis) CNegro else Color(0xFF888888))
-                                    .clickable { sel = p to i },
+                                    .tapOLargo(p, i,
+                                        onTap = { onVerDia(cal.date(i)) },
+                                        onLong = { rDesde = cal.date(i); rHasta = cal.date(i); sel = p to i }),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -315,7 +348,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
             }
         }
         Spacer(Modifier.height(12.dp))
-        Text("Toca una casilla para ver el turno o apuntar/quitar vacaciones. Mantén pulsado 2 s un nombre para ver su año.", fontSize = 12.sp)
+        Text("Toca un día para ver quién trabaja. Mantén 2 s una casilla para apuntar vacaciones (eliges el rango). Mantén 2 s un nombre para ver su año.", fontSize = 12.sp)
         Spacer(Modifier.height(8.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             listOf('M', 'T', 'N', 'D', 'P', 'A', 'V').forEach { c ->
@@ -325,40 +358,42 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
             TurnoBox('D', true, 24.dp)
             Text(" Festivo 12h", fontSize = 11.sp)
         }
+        Spacer(Modifier.height(24.dp))
     }
     }
 
-    sel?.let { (p, i) ->
-        val date = cal.date(i)
-        val plan = cal.plan(p, i)
-        val tiene = vac.has(p, i)
-        val desc = Turno.horas(plan) / 8.0
+    sel?.let { (p, i0) ->
+        val d0 = rDesde ?: cal.date(i0)
+        val d1 = rHasta ?: d0
+        val x = cal.index(d0)
+        val y = cal.index(d1)
+        val nuevos = (x..y).filter { !vac.has(p, it) }
+        val desc = nuevos.sumOf { Turno.horas(cal.plan(p, it)) } / 8.0
+        val quedan = vac.sobrantesRestantes(p) - desc
         AlertDialog(
             onDismissRequest = { sel = null },
-            title = { Text("${cal.people[p].name} · ${fechaCorta(date)}") },
+            title = { Text("Vacaciones de ${cal.people[p].name}") },
             text = {
                 Column {
-                    Text(fechaLarga(date) + if (cal.isHoliday(i)) " (festivo)" else "")
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                        pickDate(ctx, cal, d0) { d -> rDesde = d; if (d1 < d) rHasta = d }
+                    }) { Text("Desde: ${fechaLarga(d0)}", fontSize = 12.sp) }
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                        pickDate(ctx, cal, d1) { d -> rHasta = d; if (d0 > d) rDesde = d }
+                    }) { Text("Hasta: ${fechaLarga(d1)}", fontSize = 12.sp) }
                     Spacer(Modifier.height(8.dp))
+                    Text("${y - x + 1} día(s) · se descontarían ${fmtDias(desc)} días sobrantes")
                     Text(
-                        if (tiene) "Vacaciones. Turno original: ${Turno.nombre(plan, cal.isHoliday(i))}"
-                        else "Turno: ${Turno.nombre(plan, cal.isHoliday(i))}",
-                        fontWeight = FontWeight.Bold
+                        "Quedarían ${fmtDias(quedan)}", fontWeight = FontWeight.Bold,
+                        color = if (quedan < 0) Color(0xFFCC0000) else CNegro
                     )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        if (desc > 0) "Estas vacaciones ${if (tiene) "descuentan" else "descontarían"} ${fmtDias(desc)} día(s) de sobrantes."
-                        else "Es día libre: no descuenta días sobrantes."
-                    )
+                    OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                        vac.remove(p, x, y); sel = null
+                    }) { Text("Quitar vacaciones de este rango") }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (tiene) vac.remove(p, i, i) else vac.add(p, i, i)
-                    sel = null
-                }) { Text(if (tiene) "Quitar vacaciones" else "Apuntar vacaciones") }
-            },
-            dismissButton = { TextButton(onClick = { onVerDia(date); sel = null }) { Text("Ver el día") } }
+            confirmButton = { TextButton(onClick = { vac.add(p, x, y); sel = null }) { Text("Apuntar") } },
+            dismissButton = { TextButton(onClick = { sel = null }) { Text("Cancelar") } }
         )
     }
 }
