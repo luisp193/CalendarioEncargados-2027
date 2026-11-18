@@ -31,6 +31,8 @@ App Android personal de Luis para consultar el calendario de turnos de 12 h de l
 
 ## Interacción del Calendario
 - Tocar un día (casilla) → abre la pantalla Día con esa fecha. Mantener pulsada una casilla 2 s → diálogo para apuntar/quitar vacaciones eligiendo rango (Desde/Hasta). Mantener pulsado un nombre 2 s → año completo.
+- Al pasar de diciembre con "Sig." se va a enero del año siguiente (y de enero con "Ant." a diciembre del anterior).
+- Columna de nombres estrecha (62 dp, `NombreChip(compacto = true)`) para que las casillas de los días sean más anchas en horizontal.
 - Barra inferior propia (50 dp, iconos de 24 sp) en vez de NavigationBar, para dejar más sitio al calendario en vertical.
 
 ## Estructura

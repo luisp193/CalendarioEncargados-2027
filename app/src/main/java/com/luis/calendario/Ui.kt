@@ -185,19 +185,20 @@ fun TurnoBox(c: Char, festivo: Boolean, size: Dp = 28.dp, destacado: Boolean = f
 }
 
 @Composable
-fun NombreChip(cal: Cal, p: Int, modifier: Modifier = Modifier) {
+fun NombreChip(cal: Cal, p: Int, modifier: Modifier = Modifier, compacto: Boolean = false) {
     val luis = p == cal.luis
     Box(
         modifier
             .background(ColorPersona[p])
             .border(if (luis) 3.dp else 0.5.dp, if (luis) CNegro else Color(0xFF888888))
-            .padding(horizontal = 8.dp, vertical = if (luis) 8.dp else 5.dp),
+            .padding(horizontal = if (compacto) 3.dp else 8.dp, vertical = if (compacto) 0.dp else if (luis) 8.dp else 5.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Text(
-            (if (luis) "★ " else "") + cal.people[p].name, color = CNegro,
+            (if (luis) (if (compacto) "★" else "★ ") else "") + cal.people[p].name, color = CNegro,
             fontWeight = if (luis) FontWeight.ExtraBold else FontWeight.Medium,
-            fontSize = if (luis) 16.sp else 14.sp
+            fontSize = if (compacto) (if (luis) 12.sp else 11.sp) else if (luis) 16.sp else 14.sp,
+            maxLines = 1
         )
     }
 }
@@ -274,7 +275,9 @@ fun App(cals: Calendarios, store: VacStore) {
                             BackHandler { anual = null }
                             AnualScreen(cal, vac, an) { anual = null }
                         } else when (tab) {
-                            0 -> CalendarioScreen(cal, vac, dia, { d -> dia = d; tab = 1 }, { anual = it })
+                            0 -> CalendarioScreen(cal, vac, dia, { d -> dia = d; tab = 1 }, { anual = it }) { y, m ->
+                                if (y in cals.years) { dia = LocalDate.of(y, m, 1); year = y }
+                            }
                             1 -> DiaScreen(cal, vac, dia) { dia = it }
                             2 -> VacacionesScreen(cal, vac)
                             3 -> BuscarScreen(cal, vac)
@@ -289,7 +292,10 @@ fun App(cals: Calendarios, store: VacStore) {
 
 // ---------- Calendario (rejilla como el Excel) ----------
 @Composable
-fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (LocalDate) -> Unit, onAnual: (Int) -> Unit) {
+fun CalendarioScreen(
+    cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (LocalDate) -> Unit, onAnual: (Int) -> Unit,
+    onIrA: (Int, Int) -> Unit
+) {
     var month by remember { mutableStateOf(inicial.monthValue) }
     var sel by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var rDesde by remember { mutableStateOf<LocalDate?>(null) }
@@ -301,24 +307,24 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
     SinEscalaLetra {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val horizontal = maxWidth > maxHeight
-    val nameW = 96.dp
+    val nameW = 62.dp
     val cw = if (horizontal) (maxWidth - nameW - 18.dp) / n else 32.dp
     val hdrH = 42.dp
     fun rowH(p: Int) = if (horizontal) (if (p == cal.luis) 38.dp else 30.dp) else (if (p == cal.luis) 44.dp else 34.dp)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { month = if (month == 1) 12 else month - 1 }) { Text("◀ Ant.") }
+            TextButton(onClick = { if (month == 1) onIrA(cal.year - 1, 12) else month -= 1 }) { Text("◀ Ant.") }
             Text("${nombreMes(month)} ${cal.year}", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            TextButton(onClick = { month = if (month == 12) 1 else month + 1 }) { Text("Sig. ▶") }
+            TextButton(onClick = { if (month == 12) onIrA(cal.year + 1, 1) else month += 1 }) { Text("Sig. ▶") }
         }
         Row {
             Column(Modifier.width(nameW)) {
                 Box(Modifier.height(hdrH).fillMaxWidth().background(Color(0xFFD9D9D9)), contentAlignment = Alignment.Center) {
-                    Text("Encargado", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Encargado", fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
                 cal.people.indices.forEach { p ->
-                    NombreChip(cal, p, Modifier.height(rowH(p)).fillMaxWidth().pulsar2s { onAnual(p) })
+                    NombreChip(cal, p, Modifier.height(rowH(p)).fillMaxWidth().pulsar2s { onAnual(p) }, compacto = true)
                 }
             }
             Column(Modifier.horizontalScroll(rememberScrollState())) {
