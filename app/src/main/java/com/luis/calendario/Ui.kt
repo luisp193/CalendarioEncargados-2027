@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -171,11 +172,23 @@ fun Titulo(t: String) {
 
 // ---------- App ----------
 @Composable
-fun App(cal: Cal, vac: Vacaciones) {
+fun App(cals: Calendarios, store: VacStore) {
     var tab by remember { mutableStateOf(0) }
-    var dia by remember { mutableStateOf(hoyOInicio(cal)) }
+    val hoy = LocalDate.now()
+    var year by remember { mutableStateOf(if (hoy.year in cals.years) hoy.year else cals.primero) }
+    val cal = remember(year) { cals.get(year) }
+    val vac = remember(cal) { Vacaciones(store, cal) }
+    var dia by remember { mutableStateOf(if (hoy.year == year) hoy else LocalDate.of(year, 1, 1)) }
     var anual by remember { mutableStateOf<Int?>(null) }
     val tabs = listOf("Calendario" to "📅", "Día" to "🔎", "Vacaciones" to "🌴", "Buscar" to "🔍", "Resumen" to "📊")
+
+    fun cambiarAnio(y: Int) {
+        if (y !in cals.years) return
+        val m = dia.monthValue
+        dia = LocalDate.of(y, m, minOf(dia.dayOfMonth, LocalDate.of(y, m, 1).lengthOfMonth()))
+        year = y
+    }
+
     MaterialTheme {
         Scaffold(
             bottomBar = {
@@ -190,17 +203,39 @@ fun App(cal: Cal, vac: Vacaciones) {
                 }
             }
         ) { pad ->
-            Box(Modifier.padding(pad).fillMaxSize()) {
+            Column(Modifier.padding(pad).fillMaxSize()) {
                 val an = anual
-                if (an != null) {
-                    BackHandler { anual = null }
-                    AnualScreen(cal, vac, an) { anual = null }
-                } else when (tab) {
-                    0 -> CalendarioScreen(cal, vac, dia, { d -> dia = d; tab = 1 }, { anual = it })
-                    1 -> DiaScreen(cal, vac, dia) { dia = it }
-                    2 -> VacacionesScreen(cal, vac)
-                    3 -> BuscarScreen(cal, vac)
-                    else -> ResumenScreen(cal, vac)
+                if (an == null) {
+                    Row(
+                        Modifier.fillMaxWidth().height(40.dp).background(Color(0xFFEDEDED)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { cambiarAnio(year - 1) }, enabled = year > cals.primero) { Text("◀") }
+                        Text("$year", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                        TextButton(onClick = { cambiarAnio(year + 1) }, enabled = year < Calendarios.ULTIMO) { Text("▶") }
+                        if (cal.forecast) {
+                            Text(
+                                "PREVISIÓN: ciclo de 5 semanas, sin festivos", fontSize = 11.sp, maxLines = 2,
+                                color = Color(0xFFB45F00), fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Text("Objetivo ${cal.target} h", fontSize = 11.sp)
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    key(year) {
+                        if (an != null) {
+                            BackHandler { anual = null }
+                            AnualScreen(cal, vac, an) { anual = null }
+                        } else when (tab) {
+                            0 -> CalendarioScreen(cal, vac, dia, { d -> dia = d; tab = 1 }, { anual = it })
+                            1 -> DiaScreen(cal, vac, dia) { dia = it }
+                            2 -> VacacionesScreen(cal, vac)
+                            3 -> BuscarScreen(cal, vac)
+                            else -> ResumenScreen(cal, vac)
+                        }
+                    }
                 }
             }
         }
@@ -390,7 +425,7 @@ fun VacacionesScreen(cal: Cal, vac: Vacaciones) {
         Card(colors = CardDefaults.cardColors(containerColor = ColorPersona[p].copy(alpha = 0.35f)), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp)) {
                 Text("Días sobrantes de ${cal.people[p].name}", fontWeight = FontWeight.Bold)
-                Text("Iniciales (Excel): ${fmtDias(vac.sobrantesIniciales(p))}")
+                Text("Iniciales: ${fmtDias(vac.sobrantesIniciales(p))}")
                 Text("Descontados por vacaciones: ${fmtDias(vac.descontados(p))}")
                 val r = vac.sobrantesRestantes(p)
                 Text("Restantes: ${fmtDias(r)}", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (r < 0) Color(0xFFCC0000) else CNegro)

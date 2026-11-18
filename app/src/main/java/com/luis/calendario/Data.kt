@@ -40,26 +40,16 @@ object Turno {
     val trabajo = listOf('M', 'T', 'N', 'D', 'P', 'A')
 }
 
-class Person(val name: String, val plan: String, val sobrantes: Double)
+class Person(val name: String, val plan: String)
 
-class Cal(json: String) {
-    val year: Int
-    val target: Int
-    val people: List<Person>
-    private val holidays: String
-
-    init {
-        val o = JSONObject(json)
-        year = o.getInt("year")
-        target = o.getInt("target")
-        holidays = o.getString("holidays")
-        val arr = o.getJSONArray("people")
-        people = (0 until arr.length()).map {
-            val p = arr.getJSONObject(it)
-            Person(p.getString("name"), p.getString("plan"), p.getDouble("sobrantes"))
-        }
-    }
-
+/** Un año de calendario. `forecast` = generado con el ciclo de 5 semanas (sin festivos). */
+class Cal(
+    val year: Int,
+    val target: Int,
+    val people: List<Person>,
+    private val holidays: String,
+    val forecast: Boolean
+) {
     val days: Int get() = holidays.length
     val luis: Int = people.indexOfFirst { it.name == "LUIS" }.coerceAtLeast(0)
 
@@ -69,28 +59,85 @@ class Cal(json: String) {
     fun isHoliday(i: Int) = holidays[i] == '1'
     fun isWeekend(i: Int) = date(i).dayOfWeek.value >= 6
 
-    /** Turno del Excel, sin vacaciones. */
+    /** Turno del calendario, sin vacaciones. */
     fun plan(p: Int, i: Int): Char = people[p].plan[i]
 
     fun monthStart(m: Int): Int = index(LocalDate.of(year, m, 1))
     fun monthLength(m: Int): Int = LocalDate.of(year, m, 1).lengthOfMonth()
 }
 
-/** Vacaciones apuntadas (se guardan en el móvil). */
-class Vacaciones(private val ctx: Context, private val cal: Cal) {
+/** Todos los años: 2026 y 2027 vienen del Excel; los siguientes se generan con el ciclo de 5 semanas. */
+class Calendarios(json: String) {
+    companion object {
+        const val ULTIMO = 2040
+    }
+
+    private val o = JSONObject(json)
+    private val cycleStart = LocalDate.parse(o.getString("cycleStart"))
+    private val defaultTarget = o.getInt("defaultTarget")
+    private val cycle = o.getJSONObject("cycle")
+    private val cache = HashMap<Int, Cal>()
+    private val excel = HashMap<Int, JSONObject>()
+
+    init {
+        val arr = o.getJSONArray("years")
+        for (k in 0 until arr.length()) excel[arr.getJSONObject(k).getInt("year")] = arr.getJSONObject(k)
+    }
+
+    val primero: Int = excel.keys.min()
+    val years: List<Int> = (primero..ULTIMO).toList()
+
+    fun get(year: Int): Cal = cache.getOrPut(year) {
+        val e = excel[year]
+        if (e != null) {
+            val arr = e.getJSONArray("people")
+            Cal(
+                year, e.getInt("target"),
+                (0 until arr.length()).map { Person(arr.getJSONObject(it).getString("name"), arr.getJSONObject(it).getString("plan")) },
+                e.getString("holidays"), false
+            )
+        } else {
+            val n = LocalDate.of(year, 1, 1).lengthOfYear()
+            val ini = LocalDate.of(year, 1, 1).toEpochDay() - cycleStart.toEpochDay()
+            val orden = excel.getValue(primero).getJSONArray("people").let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("name") } }
+            Cal(
+                year, defaultTarget,
+                orden.map { nm ->
+                    val c = cycle.getString(nm)
+                    Person(nm, String(CharArray(n) { i -> c[Math.floorMod(ini + i, 35L).toInt()] }))
+                },
+                "0".repeat(n), true
+            )
+        }
+    }
+}
+
+/** Vacaciones apuntadas (se guardan en el móvil), por fecha, para todos los años. */
+class VacStore(ctx: Context) {
     private val prefs = ctx.getSharedPreferences("vacaciones", Context.MODE_PRIVATE)
 
-    /** nombre -> días del año (índice 0..364) */
-    var map: Map<String, Set<Int>> by mutableStateOf(load())
+    /** nombre -> días (epochDay) */
+    var map: Map<String, Set<Long>> by mutableStateOf(load())
         private set
 
-    private fun load(): Map<String, Set<Int>> {
+    private fun load(): Map<String, Set<Long>> {
         return try {
-            val o = JSONObject(prefs.getString("v", "{}") ?: "{}")
-            val r = HashMap<String, Set<Int>>()
-            for (k in o.keys()) {
-                val a = o.getJSONArray(k)
-                r[k] = (0 until a.length()).map { a.getInt(it) }.toSet()
+            val r = HashMap<String, Set<Long>>()
+            val nuevo = prefs.getString("v2", null)
+            if (nuevo != null) {
+                val o = JSONObject(nuevo)
+                for (k in o.keys()) {
+                    val a = o.getJSONArray(k)
+                    r[k] = (0 until a.length()).map { a.getLong(it) }.toSet()
+                }
+            } else {
+                // Formato antiguo (V1-V3): índices de día de 2027
+                val o = JSONObject(prefs.getString("v", "{}") ?: "{}")
+                val base = LocalDate.of(2027, 1, 1).toEpochDay()
+                for (k in o.keys()) {
+                    val a = o.getJSONArray(k)
+                    r[k] = (0 until a.length()).map { base + a.getInt(it) }.toSet()
+                }
             }
             r
         } catch (e: Exception) {
@@ -98,30 +145,43 @@ class Vacaciones(private val ctx: Context, private val cal: Cal) {
         }
     }
 
-    private fun save(m: Map<String, Set<Int>>) {
+    private fun save(m: Map<String, Set<Long>>) {
         val o = JSONObject()
         for ((k, v) in m) o.put(k, JSONArray(v.sorted()))
-        prefs.edit().putString("v", o.toString()).apply()
+        prefs.edit().putString("v2", o.toString()).apply()
         map = m
     }
 
-    fun has(p: Int, i: Int) = map[cal.people[p].name]?.contains(i) == true
-
-    fun days(p: Int): Set<Int> = map[cal.people[p].name] ?: emptySet()
-
-    fun add(p: Int, from: Int, to: Int) {
-        val n = cal.people[p].name
+    fun add(name: String, from: Long, to: Long) {
         val m = map.toMutableMap()
-        m[n] = (m[n] ?: emptySet()) + (from..to)
+        m[name] = (m[name] ?: emptySet()) + (from..to)
         save(m)
     }
 
-    fun remove(p: Int, from: Int, to: Int) {
-        val n = cal.people[p].name
+    fun remove(name: String, from: Long, to: Long) {
         val m = map.toMutableMap()
-        m[n] = (m[n] ?: emptySet()) - (from..to).toSet()
+        m[name] = (m[name] ?: emptySet()) - (from..to).toSet()
         save(m)
     }
+}
+
+/** Vistas de las vacaciones para un año concreto. */
+class Vacaciones(private val st: VacStore, private val cal: Cal) {
+    private val first = LocalDate.of(cal.year, 1, 1).toEpochDay()
+
+    /** Para claves de recomposición/caché en las pantallas. */
+    val map: Map<String, Set<Long>> get() = st.map
+
+    private fun nm(p: Int) = cal.people[p].name
+
+    fun has(p: Int, i: Int) = st.map[nm(p)]?.contains(first + i) == true
+
+    /** Índices de día (0..) del año con vacaciones. */
+    fun days(p: Int): Set<Int> =
+        (st.map[nm(p)] ?: emptySet()).map { (it - first).toInt() }.filter { it >= 0 && it < cal.days }.toSet()
+
+    fun add(p: Int, from: Int, to: Int) = st.add(nm(p), first + from, first + to)
+    fun remove(p: Int, from: Int, to: Int) = st.remove(nm(p), first + from, first + to)
 
     /** Turno efectivo: 'V' si hay vacaciones. */
     fun code(p: Int, i: Int): Char = if (has(p, i)) 'V' else cal.plan(p, i)

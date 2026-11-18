@@ -9,12 +9,15 @@ App Android personal de Luis para consultar el calendario de turnos de 12 h de l
 - Paquete `com.luis.calendario` · minSdk 26 · Kotlin + Jetpack Compose, sin base de datos (SharedPreferences).
 - El Excel original (`CALENDARIO 2027 (12h)ENCARGADOS.xlsx`) NO se sube a Git (`.gitignore`); los datos van ya extraídos en `app/src/main/assets/calendario2027.json`.
 
-## Datos (calendario2027.json)
-- `people[]`: `name`, `plan` (365 caracteres, uno por día del año) y `sobrantes` (días sobrantes del Excel).
-- Códigos del plan: `M` mañana 8h · `T` tarde 8h · `N` noche 8h · `D` día 12h · `P` noche 12h · `A` partido (8h) · `.` libre.
-- `holidays`: 365 caracteres `0/1`; festivo = día con turno 12h en día laborable (celdas rosas del Excel).
-- Horas objetivo: 1592 por encargado. Sobrantes iniciales = (horas del calendario − 1592) / 8 (JUANAN 19, CARLOS 22, AITOR 18, IÑAKI 21,5, LUIS 19,5). Las horas calculadas coinciden con los totales del Excel.
-- Para regenerar el JSON desde el Excel: se leyó el XML de la hoja "CALENDARIO 12H - 2027" (bloques de 10 filas por mes, filas +1..+5 = encargados, columnas B..AF = días).
+## Datos (app/src/main/assets/calendarios.json)
+- `years[]`: 2026 y 2027 sacados del Excel (`year`, `target`, `holidays`, `people[]` con `name` y `plan`).
+- `plan`: un carácter por día del año. `M` mañana 8h · `T` tarde 8h · `N` noche 8h · `D` día 12h · `P` noche 12h · `A` partido (8h) · `.` libre.
+- `holidays`: `0/1` por día; festivo = día laborable con turno 12h (celdas rosas del Excel).
+- **Horas objetivo:** 2026 = 1635 h (1592 + 43, lo dijo Luis; el Excel pone 1638). 2027 en adelante = 1592 h.
+- Sobrantes iniciales = (horas del calendario − objetivo) / 8. En 2027 coinciden con el Excel (JUANAN 19, CARLOS 22, AITOR 18, IÑAKI 21,5, LUIS 19,5).
+- **2028–2040 (previsión):** se generan con `cycle` (ciclo de 5 semanas = 35 días, empezando el 2026-01-01; comprobado sin fallos contra 2026 y 2027). Sin festivos (no se pueden predecir; son de la empresa) y con objetivo 1592. La app los marca como PREVISIÓN.
+- Para regenerar el JSON desde el Excel: se leyó el XML de las hojas "CALENDARIO 12H - 2026/2027" (bloques de 10 filas por mes, filas +1..+5 = encargados, columnas B..AF = días).
+- Las vacaciones se guardan por fecha (epochDay) en SharedPreferences (`v2`), para todos los años. `v` es el formato antiguo (índices de 2027) y se migra solo.
 
 ## Reglas de negocio
 - Colores del Excel: M naranja `FFC000`, T azul `00B0F0`, N gris `BFBFBF`, D/P rojo `FF0000` (fin de semana) o rosa `FF33CC` (festivo), Partido verde `92D050`.
@@ -23,7 +26,7 @@ App Android personal de Luis para consultar el calendario de turnos de 12 h de l
 - La fila de **LUIS** siempre va más marcada (borde grueso negro, letra grande y en negrita, estrella ★).
 
 ## Estructura
-- `Data.kt`: modelo (`Cal`, `Person`), reglas de turnos y almacén de vacaciones (`Vacaciones`).
+- `Data.kt`: modelo (`Cal` = un año, `Calendarios` = todos los años), reglas de turnos, almacén de vacaciones (`VacStore`) y su vista por año (`Vacaciones`). Selector de año ◀ ▶ arriba en la app.
 - `Anual.kt`: vista del año completo de un encargado (ajustada para entrar entera en pantalla, zoom con pellizco, doble toque restaura, sin barra inferior) (se abre manteniendo pulsado 2 s su nombre en el Calendario).
 - Horizontal: el mes entero cabe en pantalla (ancho de casilla calculado); la Activity gestiona el giro con `configChanges` para no perder el estado.
 - `Ui.kt`: pantallas Compose: Calendario (rejilla del mes), Día (quién trabaja y en qué turno), Vacaciones, Buscar (filtros + texto libre) y Resumen (horas, sobrantes y acumulados por mes).
