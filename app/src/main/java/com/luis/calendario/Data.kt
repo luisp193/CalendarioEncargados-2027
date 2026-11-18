@@ -40,8 +40,8 @@ object Turno {
     val trabajo = listOf('M', 'T', 'N', 'D', 'P', 'A')
 }
 
-/** `tone`: color de la casilla en el Excel para turnos de 12h: R rojo, K rosa (festivo), W sin color, G gris. */
-class Person(val name: String, val plan: String, val tone: String)
+/** `fill`: color de fondo de cada casilla tal y como está en el Excel (índice en la paleta, '-' = sin color). */
+class Person(val name: String, val plan: String, val fill: String)
 
 /** Un año de calendario. `forecast` = generado con el ciclo de 5 semanas (sin festivos). */
 class Cal(
@@ -49,7 +49,9 @@ class Cal(
     val target: Int,
     val people: List<Person>,
     private val holidays: String,
-    val forecast: Boolean
+    val forecast: Boolean,
+    private val palette: List<String>,
+    private val hfill: String
 ) {
     val days: Int get() = holidays.length
     val luis: Int = people.indexOfFirst { it.name == "LUIS" }.coerceAtLeast(0)
@@ -62,6 +64,14 @@ class Cal(
 
     /** Turno del calendario, sin vacaciones. */
     fun plan(p: Int, i: Int): Char = people[p].plan[i]
+
+    private fun hex(ch: Char): String? = if (ch == '-') null else palette[ch - 'a']
+
+    /** Color de fondo de la casilla en el Excel (RRGGBB) o null si no tiene. */
+    fun fillHex(p: Int, i: Int): String? = hex(people[p].fill[i])
+
+    /** Color de fondo de la cabecera del día en el Excel. */
+    fun headHex(i: Int): String? = hex(hfill[i])
 
     fun monthStart(m: Int): Int = index(LocalDate.of(year, m, 1))
     fun monthLength(m: Int): Int = LocalDate.of(year, m, 1).lengthOfMonth()
@@ -78,6 +88,13 @@ class Calendarios(json: String) {
     private val defaultTarget = o.getInt("defaultTarget")
     private val cycle = o.getJSONObject("cycle")
     private val cache = HashMap<Int, Cal>()
+    private val palette: MutableList<String> = o.getJSONArray("palette").let { a -> (0 until a.length()).map { a.getString(it) }.toMutableList() }
+
+    private fun pal(h: String): Char {
+        var k = palette.indexOf(h)
+        if (k < 0) { palette.add(h); k = palette.size - 1 }
+        return 'a' + k
+    }
     private val excel = HashMap<Int, JSONObject>()
 
     init {
@@ -94,8 +111,11 @@ class Calendarios(json: String) {
             val arr = e.getJSONArray("people")
             Cal(
                 year, e.getInt("target"),
-                (0 until arr.length()).map { Person(arr.getJSONObject(it).getString("name"), arr.getJSONObject(it).getString("plan"), arr.getJSONObject(it).getString("tone")) },
-                e.getString("holidays"), false
+                (0 until arr.length()).map {
+                    val p = arr.getJSONObject(it)
+                    Person(p.getString("name"), p.getString("plan"), p.getString("fill"))
+                },
+                e.getString("holidays"), false, palette, e.getString("hfill")
             )
         } else {
             val n = LocalDate.of(year, 1, 1).lengthOfYear()
@@ -106,9 +126,21 @@ class Calendarios(json: String) {
                 orden.map { nm ->
                     val c = cycle.getString(nm)
                     val plan = String(CharArray(n) { i -> c[Math.floorMod(ini + i, 35L).toInt()] })
-                    Person(nm, plan, String(CharArray(n) { i -> if (plan[i] == 'D' || plan[i] == 'P') 'R' else '.' }))
+                    // Como en el Excel: fines de semana en rojo (toda la columna), turnos con su color
+                    val fill = String(CharArray(n) { i ->
+                        val finde = LocalDate.ofYearDay(year, i + 1).dayOfWeek.value >= 6
+                        when {
+                            finde || plan[i] == 'D' || plan[i] == 'P' -> pal("FF0000")
+                            plan[i] == 'M' -> pal("FFC000")
+                            plan[i] == 'T' -> pal("00B0F0")
+                            plan[i] == 'N' -> pal("BFBFBF")
+                            plan[i] == 'A' -> pal("92D050")
+                            else -> '-'
+                        }
+                    })
+                    Person(nm, plan, fill)
                 },
-                "0".repeat(n), true
+                "0".repeat(n), true, palette, String(CharArray(n) { pal("D9D9D9") })
             )
         }
     }

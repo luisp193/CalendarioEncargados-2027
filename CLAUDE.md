@@ -12,9 +12,11 @@ App Android personal de Luis para consultar el calendario de turnos de 12 h de l
 ## Datos (app/src/main/assets/calendarios.json)
 - `years[]`: 2026 y 2027 sacados del Excel (`year`, `target`, `holidays`, `people[]` con `name` y `plan`).
 - `plan`: un carácter por día del año. `M` mañana 8h · `T` tarde 8h · `N` noche 8h · `D` día 12h · `P` noche 12h · `A` partido (8h) · `.` libre.
-- `tone` (por persona): color real de cada casilla de 12h en el Excel: `R` rojo, `K` rosa (festivo), `W` sin color, `G` gris. La app pinta exactamente eso.
+- `palette` + `fill` (por persona) + `hfill` (cabecera): color de fondo REAL de cada casilla del Excel, también de las vacías (en el Excel toda la columna de fin de semana va en rojo y la de festivo en rosa). `fill` = una letra por día (`a` = palette[0]…, `-` = sin color). La app pinta exactamente eso; las vacaciones (V) van encima en verde. En los años de previsión: fin de semana = columna roja, turnos con su color.
+- La rejilla (Calendario y vista anual) ignora la escala de letra del sistema (`SinEscalaLetra`) para que los textos no se corten.
 - `holidays`: `0/1` por día; festivo = día con alguna casilla rosa en el Excel.
-- Verificado celda a celda contra el Excel (turnos, colores y recuentos mensuales de M/T/N/D/P) en 2026 y 2027: 0 diferencias.
+- Fila de LUIS: mismos colores que el Excel; se marca con borde grueso negro, letra más grande y negrita, fila más alta y ★.
+- Verificado celda a celda contra el Excel (turnos, color de fondo de todas las casillas y recuentos mensuales de M/T/N/D/P) en 2026 y 2027: 0 diferencias.
 - **Horas objetivo:** 2026 = 1635 h (1592 + 43, lo dijo Luis; el Excel pone 1638). 2027 en adelante = 1592 h.
 - Sobrantes iniciales = (horas del calendario − objetivo) / 8. En 2027 coinciden con el Excel (JUANAN 19, CARLOS 22, AITOR 18, IÑAKI 21,5, LUIS 19,5).
 - **2028–2040 (previsión):** se generan con `cycle` (ciclo de 5 semanas = 35 días, empezando el 2026-01-01; comprobado sin fallos contra 2026 y 2027). Sin festivos (no se pueden predecir; son de la empresa) y con objetivo 1592. La app los marca como PREVISIÓN.

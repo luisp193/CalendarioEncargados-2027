@@ -49,6 +49,7 @@ fun AnualScreen(cal: Cal, vac: Vacaciones, p: Int, onCerrar: () -> Unit) {
     var off by remember { mutableStateOf(Offset.Zero) }
     var caja by remember { mutableStateOf(IntSize.Zero) }
 
+    SinEscalaLetra {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val horizontal = maxWidth > maxHeight
         val labW = 36.dp
@@ -124,9 +125,7 @@ fun AnualScreen(cal: Cal, vac: Vacaciones, p: Int, onCerrar: () -> Unit) {
                                 } else {
                                     val i = st + d - 1
                                     val c = vac.code(p, i)
-                                    val bg = if (c != '.') cal.fill(p, i, c)
-                                    else if (cal.isWeekend(i) || cal.isHoliday(i)) Color(0xFFEDEDED)
-                                    else Color.White
+                                    val bg = cal.fill(p, i, c)
                                     Box(
                                         Modifier.size(cw, ch).background(bg)
                                             .border(if (luis) 1.dp else 0.5.dp, if (luis) CNegro else borde),
@@ -152,5 +151,6 @@ fun AnualScreen(cal: Cal, vac: Vacaciones, p: Int, onCerrar: () -> Unit) {
                 Text(" Festivo  ·  Pellizca para ampliar, doble toque para restaurar", fontSize = 10.sp, maxLines = 1)
             }
         }
+    }
     }
 }

@@ -56,6 +56,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -97,15 +100,18 @@ fun colorTurno(c: Char, festivo: Boolean): Color = when (c) {
     else -> Color.Transparent
 }
 
-/** Color real de la casilla (el de la celda del Excel para turnos de 12h). */
-fun Cal.fill(p: Int, i: Int, c: Char): Color = when (c) {
-    'D', 'P' -> when (people[p].tone[i]) {
-        'K' -> CRosa
-        'W' -> Color.Transparent
-        'G' -> CGris
-        else -> CRojo
-    }
-    else -> colorTurno(c, false)
+private val colorCache = HashMap<String, Color>()
+fun hexColor(h: String?): Color =
+    if (h == null) Color.White else colorCache.getOrPut(h) { Color(("FF$h").toLong(16)) }
+
+/** Color real de la casilla (el de la celda del Excel). Vacaciones = verde. */
+fun Cal.fill(p: Int, i: Int, c: Char): Color = if (c == 'V') CVacas else hexColor(fillHex(p, i))
+
+/** Textos de la rejilla con tamaño fijo (sin la escala de letra del sistema), para que no se corten. */
+@Composable
+fun SinEscalaLetra(content: @Composable () -> Unit) {
+    val d = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(d.density, 1f)) { content() }
 }
 
 val DiaLetra = listOf("L", "M", "X", "J", "V", "S", "D")
@@ -292,6 +298,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
     val n = cal.monthLength(month)
     val start = cal.monthStart(month)
 
+    SinEscalaLetra {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val horizontal = maxWidth > maxHeight
     val nameW = 96.dp
@@ -318,16 +325,14 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
                 Row {
                     for (d in 0 until n) {
                         val i = start + d
-                        val fest = cal.isHoliday(i)
-                        val fin = cal.isWeekend(i)
                         Column(
                             Modifier.size(cw, hdrH)
-                                .background(if (fest) CRosa else if (fin) Color(0xFFAAAAAA) else Color(0xFFD9D9D9))
+                                .background(hexColor(cal.headHex(i)))
                                 .border(0.5.dp, Color(0xFF888888)),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                         ) {
                             Text("${d + 1}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CNegro)
-                            Text(DiaLetra[cal.date(i).dayOfWeek.value - 1], fontSize = 9.sp, color = CNegro)
+                            Text(DiaLetra[cal.date(i).dayOfWeek.value - 1], fontSize = 10.sp, color = CNegro, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -337,7 +342,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
                         for (d in 0 until n) {
                             val i = start + d
                             val c = vac.code(p, i)
-                            val bg = if (c == '.' && luis) Color(0xFFFFF3C4) else cal.fill(p, i, c)
+                            val bg = cal.fill(p, i, c)
                             Box(
                                 Modifier.size(cw, rowH(p))
                                     .background(bg)
@@ -370,6 +375,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
             Text(" Festivo 12h", fontSize = 11.sp)
         }
         Spacer(Modifier.height(24.dp))
+    }
     }
     }
 
