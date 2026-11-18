@@ -124,7 +124,7 @@ fun AnualScreen(cal: Cal, vac: Vacaciones, p: Int, onCerrar: () -> Unit) {
                                 } else {
                                     val i = st + d - 1
                                     val c = vac.code(p, i)
-                                    val bg = if (c != '.') colorTurno(c, cal.isHoliday(i))
+                                    val bg = if (c != '.') cal.fill(p, i, c)
                                     else if (cal.isWeekend(i) || cal.isHoliday(i)) Color(0xFFEDEDED)
                                     else Color.White
                                     Box(

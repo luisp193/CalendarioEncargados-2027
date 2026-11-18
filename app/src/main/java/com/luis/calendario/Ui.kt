@@ -97,6 +97,17 @@ fun colorTurno(c: Char, festivo: Boolean): Color = when (c) {
     else -> Color.Transparent
 }
 
+/** Color real de la casilla (el de la celda del Excel para turnos de 12h). */
+fun Cal.fill(p: Int, i: Int, c: Char): Color = when (c) {
+    'D', 'P' -> when (people[p].tone[i]) {
+        'K' -> CRosa
+        'W' -> Color.Transparent
+        'G' -> CGris
+        else -> CRojo
+    }
+    else -> colorTurno(c, false)
+}
+
 val DiaLetra = listOf("L", "M", "X", "J", "V", "S", "D")
 
 fun cap(s: String) = s.replaceFirstChar { it.uppercase() }
@@ -152,11 +163,11 @@ fun Modifier.pulsar2s(onLong: () -> Unit): Modifier = pointerInput(Unit) {
 }
 
 @Composable
-fun TurnoBox(c: Char, festivo: Boolean, size: Dp = 28.dp, destacado: Boolean = false) {
+fun TurnoBox(c: Char, festivo: Boolean, size: Dp = 28.dp, destacado: Boolean = false, fondo: Color? = null) {
     Box(
         Modifier
             .size(size)
-            .background(colorTurno(c, festivo))
+            .background(fondo ?: colorTurno(c, festivo))
             .border(if (destacado) 2.dp else 0.5.dp, if (destacado) CNegro else Color(0xFF888888)),
         contentAlignment = Alignment.Center
     ) {
@@ -285,7 +296,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
     val horizontal = maxWidth > maxHeight
     val nameW = 96.dp
     val cw = if (horizontal) (maxWidth - nameW - 18.dp) / n else 32.dp
-    val hdrH = if (horizontal) 34.dp else 40.dp
+    val hdrH = 42.dp
     fun rowH(p: Int) = if (horizontal) (if (p == cal.luis) 38.dp else 30.dp) else (if (p == cal.luis) 44.dp else 34.dp)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
@@ -326,7 +337,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
                         for (d in 0 until n) {
                             val i = start + d
                             val c = vac.code(p, i)
-                            val bg = if (c == '.' && luis) Color(0xFFFFF3C4) else colorTurno(c, cal.isHoliday(i))
+                            val bg = if (c == '.' && luis) Color(0xFFFFF3C4) else cal.fill(p, i, c)
                             Box(
                                 Modifier.size(cw, rowH(p))
                                     .background(bg)
@@ -645,7 +656,7 @@ fun BuscarScreen(cal: Cal, vac: Vacaciones) {
                 Text(fechaCorta(cal.date(h.d)), modifier = Modifier.width(92.dp), fontSize = 13.sp)
                 NombreChip(cal, h.p, Modifier.width(112.dp))
                 Spacer(Modifier.width(8.dp))
-                TurnoBox(h.c, fest, 26.dp)
+                TurnoBox(h.c, fest, 26.dp, fondo = cal.fill(h.p, h.d, h.c))
                 Text(
                     " " + Turno.nombre(h.c, false) + if (Turno.horas(h.c) > 0 && h.c in "DP" && fest) " fest." else "",
                     fontSize = 12.sp

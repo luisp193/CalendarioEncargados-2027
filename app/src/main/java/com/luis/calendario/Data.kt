@@ -40,7 +40,8 @@ object Turno {
     val trabajo = listOf('M', 'T', 'N', 'D', 'P', 'A')
 }
 
-class Person(val name: String, val plan: String)
+/** `tone`: color de la casilla en el Excel para turnos de 12h: R rojo, K rosa (festivo), W sin color, G gris. */
+class Person(val name: String, val plan: String, val tone: String)
 
 /** Un año de calendario. `forecast` = generado con el ciclo de 5 semanas (sin festivos). */
 class Cal(
@@ -93,7 +94,7 @@ class Calendarios(json: String) {
             val arr = e.getJSONArray("people")
             Cal(
                 year, e.getInt("target"),
-                (0 until arr.length()).map { Person(arr.getJSONObject(it).getString("name"), arr.getJSONObject(it).getString("plan")) },
+                (0 until arr.length()).map { Person(arr.getJSONObject(it).getString("name"), arr.getJSONObject(it).getString("plan"), arr.getJSONObject(it).getString("tone")) },
                 e.getString("holidays"), false
             )
         } else {
@@ -104,7 +105,8 @@ class Calendarios(json: String) {
                 year, defaultTarget,
                 orden.map { nm ->
                     val c = cycle.getString(nm)
-                    Person(nm, String(CharArray(n) { i -> c[Math.floorMod(ini + i, 35L).toInt()] }))
+                    val plan = String(CharArray(n) { i -> c[Math.floorMod(ini + i, 35L).toInt()] })
+                    Person(nm, plan, String(CharArray(n) { i -> if (plan[i] == 'D' || plan[i] == 'P') 'R' else '.' }))
                 },
                 "0".repeat(n), true
             )
