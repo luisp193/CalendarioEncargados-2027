@@ -4,13 +4,18 @@ package com.luis.calendario
 
 import android.app.DatePickerDialog
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -111,6 +117,19 @@ fun hoyOInicio(cal: Cal): LocalDate {
 }
 
 // ---------- Piezas comunes ----------
+/** Pulsación larga de 2 segundos. */
+fun Modifier.pulsar2s(onLong: () -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        var timedOut = true
+        withTimeoutOrNull(2000L) {
+            waitForUpOrCancellation()
+            timedOut = false
+        }
+        if (timedOut) onLong()
+    }
+}
+
 @Composable
 fun TurnoBox(c: Char, festivo: Boolean, size: Dp = 28.dp, destacado: Boolean = false) {
     Box(
@@ -155,6 +174,7 @@ fun Titulo(t: String) {
 fun App(cal: Cal, vac: Vacaciones) {
     var tab by remember { mutableStateOf(0) }
     var dia by remember { mutableStateOf(hoyOInicio(cal)) }
+    var anual by remember { mutableStateOf<Int?>(null) }
     val tabs = listOf("Calendario" to "📅", "Día" to "🔎", "Vacaciones" to "🌴", "Buscar" to "🔍", "Resumen" to "📊")
     MaterialTheme {
         Scaffold(
@@ -171,8 +191,12 @@ fun App(cal: Cal, vac: Vacaciones) {
             }
         ) { pad ->
             Box(Modifier.padding(pad).fillMaxSize()) {
-                when (tab) {
-                    0 -> CalendarioScreen(cal, vac, dia) { d -> dia = d; tab = 1 }
+                val an = anual
+                if (an != null) {
+                    BackHandler { anual = null }
+                    AnualScreen(cal, vac, an) { anual = null }
+                } else when (tab) {
+                    0 -> CalendarioScreen(cal, vac, dia, { d -> dia = d; tab = 1 }, { anual = it })
                     1 -> DiaScreen(cal, vac, dia) { dia = it }
                     2 -> VacacionesScreen(cal, vac)
                     3 -> BuscarScreen(cal, vac)
@@ -185,13 +209,18 @@ fun App(cal: Cal, vac: Vacaciones) {
 
 // ---------- Calendario (rejilla como el Excel) ----------
 @Composable
-fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (LocalDate) -> Unit) {
+fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (LocalDate) -> Unit, onAnual: (Int) -> Unit) {
     var month by remember { mutableStateOf(inicial.monthValue) }
     var sel by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val n = cal.monthLength(month)
     val start = cal.monthStart(month)
-    val cw = 32.dp
-    fun rowH(p: Int) = if (p == cal.luis) 44.dp else 34.dp
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val horizontal = maxWidth > maxHeight
+    val nameW = 96.dp
+    val cw = if (horizontal) (maxWidth - nameW - 18.dp) / n else 32.dp
+    val hdrH = if (horizontal) 34.dp else 40.dp
+    fun rowH(p: Int) = if (horizontal) (if (p == cal.luis) 38.dp else 30.dp) else (if (p == cal.luis) 44.dp else 34.dp)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -200,12 +229,12 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
             TextButton(onClick = { month = if (month == 12) 1 else month + 1 }) { Text("Sig. ▶") }
         }
         Row {
-            Column(Modifier.width(92.dp)) {
-                Box(Modifier.height(40.dp).fillMaxWidth().background(Color(0xFFD9D9D9)), contentAlignment = Alignment.Center) {
+            Column(Modifier.width(nameW)) {
+                Box(Modifier.height(hdrH).fillMaxWidth().background(Color(0xFFD9D9D9)), contentAlignment = Alignment.Center) {
                     Text("Encargado", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
                 cal.people.indices.forEach { p ->
-                    NombreChip(cal, p, Modifier.height(rowH(p)).fillMaxWidth())
+                    NombreChip(cal, p, Modifier.height(rowH(p)).fillMaxWidth().pulsar2s { onAnual(p) })
                 }
             }
             Column(Modifier.horizontalScroll(rememberScrollState())) {
@@ -215,7 +244,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
                         val fest = cal.isHoliday(i)
                         val fin = cal.isWeekend(i)
                         Column(
-                            Modifier.size(cw, 40.dp)
+                            Modifier.size(cw, hdrH)
                                 .background(if (fest) CRosa else if (fin) Color(0xFFAAAAAA) else Color(0xFFD9D9D9))
                                 .border(0.5.dp, Color(0xFF888888)),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
@@ -241,7 +270,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
                             ) {
                                 Text(
                                     Turno.letra(c), color = CNegro,
-                                    fontSize = if (luis) 16.sp else 12.sp,
+                                    fontSize = if (horizontal) (if (luis) 14.sp else 11.sp) else (if (luis) 16.sp else 12.sp),
                                     fontWeight = if (luis || c == 'V') FontWeight.ExtraBold else FontWeight.Normal
                                 )
                             }
@@ -251,7 +280,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
             }
         }
         Spacer(Modifier.height(12.dp))
-        Text("Toca una casilla para ver el turno o apuntar/quitar vacaciones.", fontSize = 12.sp)
+        Text("Toca una casilla para ver el turno o apuntar/quitar vacaciones. Mantén pulsado 2 s un nombre para ver su año.", fontSize = 12.sp)
         Spacer(Modifier.height(8.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             listOf('M', 'T', 'N', 'D', 'P', 'A', 'V').forEach { c ->
@@ -261,6 +290,7 @@ fun CalendarioScreen(cal: Cal, vac: Vacaciones, inicial: LocalDate, onVerDia: (L
             TurnoBox('D', true, 24.dp)
             Text(" Festivo 12h", fontSize = 11.sp)
         }
+    }
     }
 
     sel?.let { (p, i) ->

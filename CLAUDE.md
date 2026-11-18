@@ -24,4 +24,6 @@ App Android personal de Luis para consultar el calendario de turnos de 12 h de l
 
 ## Estructura
 - `Data.kt`: modelo (`Cal`, `Person`), reglas de turnos y almacén de vacaciones (`Vacaciones`).
+- `Anual.kt`: vista del año completo de un encargado (se abre manteniendo pulsado 2 s su nombre en el Calendario).
+- Horizontal: el mes entero cabe en pantalla (ancho de casilla calculado); la Activity gestiona el giro con `configChanges` para no perder el estado.
 - `Ui.kt`: pantallas Compose: Calendario (rejilla del mes), Día (quién trabaja y en qué turno), Vacaciones, Buscar (filtros + texto libre) y Resumen (horas, sobrantes y acumulados por mes).
