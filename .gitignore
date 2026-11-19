@@ -7,3 +7,6 @@ local.properties
 captures/
 *.apk
 *.xlsx
+app/calendario.keystore
+*.keystore
+*.jks

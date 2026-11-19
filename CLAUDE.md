@@ -5,7 +5,15 @@ App Android personal de Luis para consultar el calendario de turnos de 12 h de l
 ## Normas
 - **Versión:** `version.txt` en la raíz. Súbelo +1 en cada cambio que se compile, antes de hacer push. El número va en el nombre del APK (`Calendario_V<n>.apk`), en `app_name` y en `versionName` (lo hace `app/build.gradle.kts` solo leyendo `version.txt`). Enlace fijo: `Calendario.apk`.
 - **Compilación:** no hay Java ni Android SDK en el PC. Se compila en GitHub Actions (`.github/workflows/build.yml`, push a `main` o a mano). El APK queda en la release `ultimo-apk`.
-- **Firma fija:** `app/calendario.keystore` (misma clave que Claves) + `versionCode = GITHUB_RUN_NUMBER`, para instalar encima sin desinstalar.
+- **Firma fija:** la llave NO esta en el repo (el repo es publico). Viene de los secrets
+  `KEYSTORE_BASE64` y `KEYSTORE_PASSWORD`; el workflow reconstruye `app/calendario.keystore`
+  antes de compilar y lo borra al acabar. Alias `calendario`. Con `versionCode = GITHUB_RUN_NUMBER`
+  se instala encima sin desinstalar. Si compilas en local sin la llave, se firma con la de
+  depuracion y ese APK NO sirve para actualizar encima del instalado.
+- La llave anterior (alias `claves`, compartida con la app Claves) estuvo subida a este repo
+  publico con su contrasena, asi que se dio por comprometida y se cambio por otra el 19/11/2026.
+  Sigue en el historial de Git: no vale volver a usarla. Por eso hay que desinstalar la app una
+  vez al pasar a V9.
 - Paquete `com.luis.calendario` · minSdk 26 · Kotlin + Jetpack Compose, sin base de datos (SharedPreferences).
 - El Excel original (`CALENDARIO 2027 (12h)ENCARGADOS.xlsx`) NO se sube a Git (`.gitignore`); los datos van ya extraídos en `app/src/main/assets/calendario2027.json`.
 

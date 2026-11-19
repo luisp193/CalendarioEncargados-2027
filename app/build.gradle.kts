@@ -19,20 +19,31 @@ android {
         resValue("string", "app_name", "Calendario_V$cambio")
     }
 
+    // La llave de firma NO va en el repo. Viene de los secrets de GitHub:
+    // KEYSTORE_BASE64 y KEYSTORE_PASSWORD (el alias es "calendario").
+    // El workflow reconstruye el archivo antes de compilar.
+    val llave = file("calendario.keystore")
+    val clave = System.getenv("KEYSTORE_PASSWORD")
+    val firmaDisponible = llave.exists() && !clave.isNullOrBlank()
+
     signingConfigs {
-        create("fija") {
-            storeFile = file("calendario.keystore")
-            storePassword = "claves-its-2026"
-            keyAlias = "claves"
-            keyPassword = "claves-its-2026"
+        if (firmaDisponible) {
+            create("fija") {
+                storeFile = llave
+                storePassword = clave
+                keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "calendario"
+                keyPassword = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: clave
+            }
         }
     }
 
     buildTypes {
-        debug { signingConfig = signingConfigs.getByName("fija") }
+        // Sin la llave (compilación local de prueba) se firma con la de depuración:
+        // el APK funciona, pero no sirve para actualizar encima del instalado.
+        debug { if (firmaDisponible) signingConfig = signingConfigs.getByName("fija") }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("fija")
+            if (firmaDisponible) signingConfig = signingConfigs.getByName("fija")
         }
     }
     compileOptions {
